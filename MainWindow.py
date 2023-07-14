@@ -52,7 +52,9 @@ class MainWindow(QMainWindow):
 	def on_tab_changed(self,val):
 		#val=1<=>активана previes итд
 		if val==1:
-			
-			self.interaction_widget_tab_1.worker.camera.close()#print_smt()
+			try:
+				self.interaction_widget_tab_1.worker.camera.close()#print_smt()
+			except:
+				pass
 			#self.centralWidget().widget(1).print_smt()
 			#self.centralWidget.widget[0].camera.close()
