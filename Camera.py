@@ -28,7 +28,7 @@ class Producer(QtCore.QThread):
 		if cam_availbale:
 			self.camera = PiCamera()#(sensor_mode=2)
 			
-			self.camera.framerate = 10
+			self.camera.framerate = preview_framerate
 			self.camera.shutter_speed=init_exposure_speed
 			#self.camera.zoom=(0.5,0,0.5,1)
 			print(f'ISO:{self.camera.ISO}\nShutter speed:{self.camera.shutter_speed}\nresolution:{self.camera.resolution}')
@@ -143,55 +143,59 @@ class Producer(QtCore.QThread):
 			data = np.delete(data, np.s_[4::5], 1)
 			
 			
-			#print(self.cropy,self.cropx,self.croph,self.cropw)
+			#print(data.shape,data.dtype)
 			data=data[self.cropy:self.cropy+self.croph,self.cropx:self.cropx+self.cropw]
-			#print(data.shape)
+			self.image_ready.emit(data)# <- uint16 (10 bit)
 			
-			#self.image_ready.emit(data[1::2,0::2]>>2)
+			# #print(self.cropy,self.cropx,self.croph,self.cropw)
+			# data=data[self.cropy:self.cropy+self.croph,self.cropx:self.cropx+self.cropw]
+			# #print(data.shape)
 			
-			rgb = np.zeros(data.shape + (3,), dtype=data.dtype)
-			rgb[1::2, 0::2, 0] = data[1::2, 0::2] # Red
-			rgb[0::2, 0::2, 1] = data[0::2, 0::2] # Green
-			rgb[1::2, 1::2, 1] = data[1::2, 1::2] # Green
-			rgb[0::2, 1::2, 2] = data[0::2, 1::2] # Blue
+			# #self.image_ready.emit(data[1::2,0::2]>>2)
 			
-			bayer = np.zeros(rgb.shape, dtype=np.uint8)
-			bayer[1::2, 0::2, 0] = 1 # Red
-			bayer[0::2, 0::2, 1] = 1 # Green
-			bayer[1::2, 1::2, 1] = 1 # Green
-			bayer[0::2, 1::2, 2] = 1 # Blue
+			# rgb = np.zeros(data.shape + (3,), dtype=data.dtype)
+			# rgb[1::2, 0::2, 0] = data[1::2, 0::2] # Red
+			# rgb[0::2, 0::2, 1] = data[0::2, 0::2] # Green
+			# rgb[1::2, 1::2, 1] = data[1::2, 1::2] # Green
+			# rgb[0::2, 1::2, 2] = data[0::2, 1::2] # Blue
 			
-			output = np.empty(rgb.shape, dtype=rgb.dtype)
-			window = (3, 3)
-			borders = (window[0] - 1, window[1] - 1)
-			border = (borders[0] // 2, borders[1] // 2)
-			rgb = np.pad(rgb, [
-				(border[0], border[0]),
-				(border[1], border[1]),
-				(0, 0),
-			], 'constant')
+			# bayer = np.zeros(rgb.shape, dtype=np.uint8)
+			# bayer[1::2, 0::2, 0] = 1 # Red
+			# bayer[0::2, 0::2, 1] = 1 # Green
+			# bayer[1::2, 1::2, 1] = 1 # Green
+			# bayer[0::2, 1::2, 2] = 1 # Blue
 			
-			bayer = np.pad(bayer, [
-				(border[0], border[0]),
-				(border[1], border[1]),
-				(0, 0),
-			], 'constant')
+			# output = np.empty(rgb.shape, dtype=rgb.dtype)
+			# window = (3, 3)
+			# borders = (window[0] - 1, window[1] - 1)
+			# border = (borders[0] // 2, borders[1] // 2)
+			# rgb = np.pad(rgb, [
+				# (border[0], border[0]),
+				# (border[1], border[1]),
+				# (0, 0),
+			# ], 'constant')
 			
-			for plane in range(1):
-				p = rgb[..., plane]
-				b = bayer[..., plane]
-				pview = as_strided(p, shape=(
-					p.shape[0] - borders[0],
-					p.shape[1] - borders[1]) + window, strides=p.strides * 2)
-				bview = as_strided(b, shape=(
-					b.shape[0] - borders[0],
-					b.shape[1] - borders[1]) + window, strides=b.strides * 2)
-				psum = np.einsum('ijkl->ij', pview)
-				bsum = np.einsum('ijkl->ij', bview)
-				output[..., plane] = psum // bsum
-			output = (output >> 2).astype(np.uint8)
+			# bayer = np.pad(bayer, [
+				# (border[0], border[0]),
+				# (border[1], border[1]),
+				# (0, 0),
+			# ], 'constant')
 			
-			self.image_ready.emit(output[:,:,0])
+			# for plane in range(1):
+				# p = rgb[..., plane]
+				# b = bayer[..., plane]
+				# pview = as_strided(p, shape=(
+					# p.shape[0] - borders[0],
+					# p.shape[1] - borders[1]) + window, strides=p.strides * 2)
+				# bview = as_strided(b, shape=(
+					# b.shape[0] - borders[0],
+					# b.shape[1] - borders[1]) + window, strides=b.strides * 2)
+				# psum = np.einsum('ijkl->ij', pview)
+				# bsum = np.einsum('ijkl->ij', bview)
+				# output[..., plane] = psum // bsum
+			# output = (output >> 2).astype(np.uint8)
+			
+			# self.image_ready.emit(output[:,:,0])
 	
 			
 	def stop(self):
