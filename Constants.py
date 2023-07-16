@@ -14,6 +14,7 @@ init_exposure_speed=20000
 raw_resolution=(3280,2464) 
 preview_framerate=30
 preview_resolution=(640,480)#(2592,1944)
+start_mode=Mode.RAW
 
 pause_symbol=U'\u25A0'#U'\u24F8'
 play_symbol=U'\u25BA'

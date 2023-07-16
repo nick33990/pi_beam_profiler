@@ -37,14 +37,17 @@ class MainWindow(QMainWindow):
 		layout_tab_1.addWidget(self.interaction_widget_tab_1)
 		# layout_tab_1.addWidget(image_widget_tab_1)
 		
-		interaction_widget_tab_2=InteractionWidget(Mode.PREVIEW)
-		layout_tab_2.addWidget(interaction_widget_tab_2)
-
-		self.tab.currentChanged.connect(self.on_tab_changed)
-
-
+		self.interaction_widget_tab_2=InteractionWidget(Mode.PREVIEW)
+		layout_tab_2.addWidget(self.interaction_widget_tab_2)
+		
+		if start_mode==Mode.RAW:
+			self.interaction_widget_tab_1.init_camera()
+		else:
+			self.interaction_widget_tab_2.init_camera()
+		
 		self.tab.addTab(tab_1, 'RAW')
 		self.tab.addTab(tab_2, 'PREVIEW')
+		self.tab.currentChanged.connect(self.on_tab_changed)
 
 
 		self.setCentralWidget(self.tab)
@@ -52,9 +55,12 @@ class MainWindow(QMainWindow):
 	def on_tab_changed(self,val):
 		#val=1<=>активана previes итд
 		if val==1:
-			try:
-				self.interaction_widget_tab_1.worker.camera.close()#print_smt()
-			except:
-				pass
+			self.interaction_widget_tab_1.worker.camera.close()
+			self.interaction_widget_tab_1.close_camera()
+			self.interaction_widget_tab_2.init_camera()#print_smt()
+		else:
+			self.interaction_widget_tab_2.worker.camera.close()
+			self.interaction_widget_tab_2.close_camera()
+			self.interaction_widget_tab_1.init_camera()#print_smt()
 			#self.centralWidget().widget(1).print_smt()
 			#self.centralWidget.widget[0].camera.close()

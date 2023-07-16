@@ -5,7 +5,7 @@ from PyQt5 import QtCore, QtWidgets, QtGui
 from PyQt5.QtWidgets import QPushButton,QSpinBox
 from PyQt5.QtCore import QThread
 
-cam_availbale=True
+cam_availbale=False
 
 if cam_availbale:
 	from picamera.array import PiRGBArray,PiBayerArray
@@ -19,6 +19,7 @@ class Producer(QtCore.QThread):
 	def __init__(self,mode):
 		QtCore.QThread.__init__(self)
 		self.is_running=False
+		self.is_killed=False
 		self.resolution=preview_resolution
 		self.mode=mode
 		self.cropx=0
@@ -26,19 +27,12 @@ class Producer(QtCore.QThread):
 		self.cropw=raw_resolution[0]
 		self.croph=raw_resolution[1]
 		if cam_availbale:
-			self.camera = PiCamera()#(sensor_mode=2)
+			self.camera = PiCamera()
 			
 			self.camera.framerate = preview_framerate
 			self.camera.shutter_speed=init_exposure_speed
-			#self.camera.zoom=(0.5,0,0.5,1)
 			print(f'ISO:{self.camera.ISO}\nShutter speed:{self.camera.shutter_speed}\nresolution:{self.camera.resolution}')
-		
-		#self.camera.iso=0
-		#time.sleep(2)
-		#self.camera.shutter_speed=self.camera.exposure_speed
-		#self.camera.exposure_mode='off'
-		
-			#self.rawCapture = PiRGBArray(self.camera, size=init_resolution)
+
 			if mode==Mode.RAW:
 				self.rawCapture=PiBayerArray(self.camera, output_dims=3)
 			elif mode==Mode.PREVIEW:
@@ -54,31 +48,18 @@ class Producer(QtCore.QThread):
 	def run(self):
 		if not self.is_running:
 			self.is_running=True
-		if cam_availbale:
-			print(self.camera.resolution)
-			for frame in self.camera.capture_continuous(self.rawCapture, format="rgb", use_video_port=True):
-				image = frame.array[:,:,0].copy()
+		for frame in self.camera.capture_continuous(self.rawCapture, format="rgb", use_video_port=True):
+			image = frame.array[:,:,0].copy()
 				
-				self.image_ready.emit(image)
+			self.image_ready.emit(image)
 				
-				self.rawCapture.truncate(0)
+			self.rawCapture.truncate(0)
 
 
-				if self.is_running==False:
-					self.camera.close()
-					break
-		else:
-			while self.is_running:
-				X,Y=np.meshgrid(np.arange(0,self.resolution[0],1),np.arange(0,self.resolution[1],1))
-				mx=self.resolution[0]*0.5
-				my=self.resolution[1]*0.5
-				Dx=40#self.resolution[0]/20
-				Dy=40#self.resolution[1]/10
-				SNR=.9999
-				I=np.exp(-.5*((X-mx)/Dx)**2-.5*((Y-my)/Dy)**2)*SNR
-				I+=np.random.random(X.shape)*(1-SNR)
-				I=(255*I).astype('uint8')
-				self.image_ready.emit(I)
+			if self.is_running==False:
+					#self.camera.close()
+				break
+
 
 
 	#про raw-формат на 48-ой странице мануала:
@@ -114,7 +95,11 @@ class Producer(QtCore.QThread):
 		if not self.is_running:
 			self.is_running=True
 		stream=io.BytesIO()
-		while self.is_running:
+		while True:#self.is_running:
+			if self.is_killed:
+				break
+			if not self.is_running:
+				continue
 			self.camera.capture(stream,'jpeg',bayer=True)
 			ver = {
 				'RP_ov5647': 1,
@@ -199,7 +184,8 @@ class Producer(QtCore.QThread):
 	
 			
 	def stop(self):
-		self.is_running=False
+		self.is_killed=True
+		#self.is_running=False
 
 	################################
 	
