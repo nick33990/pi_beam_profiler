@@ -5,7 +5,7 @@ from PyQt5 import QtCore, QtWidgets, QtGui
 from PyQt5.QtWidgets import QPushButton,QSpinBox
 from PyQt5.QtCore import QThread
 
-cam_availbale=False
+cam_availbale=True
 
 if cam_availbale:
 	from picamera.array import PiRGBArray,PiBayerArray

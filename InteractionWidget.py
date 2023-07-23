@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import QMainWindow, QPushButton, QVBoxLayout, \
 from PyQt5.QtGui import QPixmap,QImage,QPainter,QPen,QColor
 
 from Constants import *
-#from BeamMath import *
+from BeamMath import beam_math
 from Camera import Producer
 
 # from matplotlib.backends.backend_qt5agg import (
@@ -31,7 +31,7 @@ class InteractionWidget(QWidget):
 		super().__init__()
 		self.mode=mode
 		self.button_pressed=False
-		self.disable_calculations=True
+		self.disable_calculations=False
 		
 		#self.setFixedSize(WIDTH,HEIGHT-10)
 		self.setGeometry(0,0,WIDTH,HEIGHT)
@@ -96,27 +96,21 @@ class InteractionWidget(QWidget):
 		
 		self.setLayout(major_layout)
 		
+		###########################
+		sm=cm.ScalarMappable(cmap=cmap)
+		sm.norm.vmin,sm.norm.vmax=0,1
+		self.rgbas=sm.to_rgba(np.linspace(0,1,256))
+		self.rgbas=[QColor(int(255*r),int(255*g),int(255*b),int(255*a)).rgba() for r,g,b,a in self.rgbas]
+		###########################
+		
 		
 		self.label = QLabel(self)
 		#qImg=self.ndarray2qimage(np.zeros([init_resolution[0],init_resolution[1],3],'uint8'))
-
-		qImg=self.ndarray2qimage(np.load('1.npy').astype('uint8'))#np.zeros([PB_HEIGHT,PB_WIDTH,3],'uint8'))
-		#######################################################################
-		sm = cm.ScalarMappable(cmap='nipy_spectral')
-		sm.norm.vmin = 0.0
-		sm.norm.vmax = 1.0
-		steps=255
-		inds = np.linspace(0, 1, steps)
-		rgbas = sm.to_rgba(inds)
-		rgbas = [QColor(int(r * 255), int(g * 255),
-				int(b * 255), int(a * 255)).rgba() for r, g, b, a in rgbas]
-		qImg.setColorTable(rgbas)
-		#######################################################################
+		qImg=self.ndarray2qimage(np.zeros([PB_HEIGHT,PB_WIDTH,3],'uint8'))
 		self.pixmap = QPixmap(QImage(qImg))
-		self.label.setPixmap(self.pixmap.scaled(PB_WIDTH,PB_HEIGHT))
+		self.label.setPixmap(self.pixmap)
 		self.label.setFixedSize(PB_WIDTH,PB_HEIGHT);
 		self.label.move(120,0);
-
 		# if mode==Mode.RAW:
 			# dynamic_canvas = FigureCanvas(Figure(figsize=(5, 3)))
 			# right_layout.addWidget(dynamic_canvas)
@@ -142,7 +136,10 @@ class InteractionWidget(QWidget):
 			self.crop_edit.setText(f"{0},{0},{raw_resolution[0]},{raw_resolution[1]}")
 			self.save_button.clicked.connect(self.save_button_clicked)
 			self.crop_edit.installEventFilter(self)
-		self.update_grid(raw_resolution[0],raw_resolution[1])
+		
+		
+		self.calc=beam_math(raw_resolution[0],raw_resolution[1])
+		
 		self.need_save=False
 		
 		self.mouse_pressed=False
@@ -242,18 +239,20 @@ class InteractionWidget(QWidget):
 		self.crop_pos.setY(self.tomod4(self.crop_pos.y(),raw_resolution[1]))
 		self.crop_size.setWidth(self.tomod4(self.crop_size.width(),raw_resolution[0]))
 		self.crop_size.setHeight(self.tomod4(self.crop_size.height(),raw_resolution[1]))
+		
+		self.calc.update_grid(self.crop_size.width(),self.crop_size.height())
 		#print(self.crop_pos)
 		#self.crop_pos=self.pos()+Interaction.elementwise_(QPointF(x0,y0),QPoint(PB_WIDTH,PB_HEIGHT))
 		
 		self.mouse_pressed=False
 	
-	def update_grid(self,w,h):
-		self.I_grid,self.J_grid=np.meshgrid(\
-			np.arange(w),\
-			np.arange(h)
-		)
-		self.I_grid_sqr=self.I_grid*self.I_grid
-		self.J_grid_sqr=self.J_grid*self.J_grid
+	# def update_grid(self,w,h):
+		# self.I_grid,self.J_grid=np.meshgrid(\
+			# np.arange(w),\
+			# np.arange(h)
+		# )
+		# self.I_grid_sqr=self.I_grid*self.I_grid
+		# self.J_grid_sqr=self.J_grid*self.J_grid
 	
 	def eventFilter(self,obj,event):
 		if event.type()==QEvent.KeyPress and obj is self.crop_edit:
@@ -324,6 +323,7 @@ class InteractionWidget(QWidget):
 		
 		if not (self.mode==Mode.PREVIEW):
 			#return 0
+			
 			img=img[self.crop_pos.y():self.crop_pos.y()+self.crop_size.height(),\
 					self.crop_pos.x():self.crop_pos.x()+self.crop_size.width()]
 
@@ -332,19 +332,12 @@ class InteractionWidget(QWidget):
 				# img[self.crop_pos.y():self.crop_pos.y()+self.crop_size.height(),\
 					# self.crop_pos.x():self.crop_pos.x()+self.crop_size.width()]=1023
 			if not self.disable_calculations:
-				P=np.sum(img,dtype='uint64')
-				if img.shape[0]!=self.I_grid.shape[0] or img.shape[1]!=self.I_grid.shape[1]:
-					print(f'img:{img.shape} \tgrid:{self.I_grid.shape}')
+				
+				if img.shape[0]!=self.calc.I_grid.shape[0] or img.shape[1]!=self.calc.I_grid.shape[1]:
+					print(f'img:{img.shape} \tgrid:{self.calc.I_grid.shape}')
 					return -1
 		
-				mx=np.sum(img*self.I_grid,dtype='uint64')
-				my=np.sum(img*self.J_grid,dtype='uint64')
-				Dx=np.sum(img*self.I_grid_sqr,dtype='uint64')
-				Dy=np.sum(img*self.J_grid_sqr,dtype='uint64')
-				mx/=P
-				my/=P
-				RMS_x=2*np.sqrt(Dx/P-mx*mx)
-				RMS_y=2*np.sqrt(Dy/P-my*my)
+				P,mx,my,RMS_x,RMS_y=self.calc.RMS(img)
 
 				mx=int(mx)
 				my=int(my)
@@ -376,7 +369,9 @@ class InteractionWidget(QWidget):
 				img=img[::2,::2]
 			#sprint(self.
 			img=(img>>2).astype('uint8')
-		tmp=QPixmap(self.ndarray2qimage(img))#.scaled(PB_WIDTH,PB_HEIGHT))
+		img=self.ndarray2qimage(img)
+		img.setColorTable(self.rgbas)
+		tmp=QPixmap(img)#.scaled(PB_WIDTH,PB_HEIGHT))
 		self.label.setPixmap(tmp.scaled(PB_WIDTH,PB_HEIGHT,Qt.KeepAspectRatio))#QPixmap(qImg))
 		
 		if self.mouse_pressed:
@@ -384,21 +379,25 @@ class InteractionWidget(QWidget):
 
 		if not (self.mode==Mode.PREVIEW or self.disable_calculations):
 			self.draw_section(ysect)
-			self.draw_section(xsect)#,mx,my)
+			self.draw_section(xsect,mx,my,\
+					(RMS_x/self.crop_size.width())*PB_WIDTH,\
+					(RMS_y/self.crop_size.height())*PB_HEIGHT)
 		
 		self.label.repaint()
 
-	def draw_section(self,section,mx=-1,my=-1):
+	def draw_section(self,section,mx=-1,my=-1,RMS_x=-1,RMS_y=-1):
 		painter1=QPainter(self.label.pixmap())
 		painter1.setPen(QPen(Qt.yellow,1))
 
 		for i in range(1,len(section)):
 			painter1.drawLine(section[i-1,0],section[i-1,1],section[i,0],section[i,1])
-		painter1.setPen(QPen(Qt.red,1))
+		painter1.setPen(QPen(Qt.red,1,Qt.DashLine))
 		if mx!=-1:
 			painter1.drawLine(mx,0,mx,PB_HEIGHT)
 		if my!=-1:
 			painter1.drawLine(0,my,PB_WIDTH,my)
+		if RMS_x!=-1:
+			painter1.drawEllipse(QPoint(mx,my),RMS_x,RMS_y)
 
 
 #pc peformance test:

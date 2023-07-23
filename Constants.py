@@ -4,6 +4,7 @@ class Mode(Enum):
 	RAW=0
 	PREVIEW=1
 
+cmap='gnuplot2'
 WIDTH=600
 HEIGHT=440
 PB_WIDTH=420
