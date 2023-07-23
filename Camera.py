@@ -31,8 +31,14 @@ class Producer(QtCore.QThread):
 			
 			self.camera.framerate = preview_framerate
 			self.camera.shutter_speed=init_exposure_speed
+			#self.camera.ISO=100
+			# self.camera.exposure_mode='off'
+			
+			# self.camera.awb_mode='off'
+			#self.camera.ISO=800#analog gain=1
 			print(f'ISO:{self.camera.ISO}\nShutter speed:{self.camera.shutter_speed}\nresolution:{self.camera.resolution}')
-
+			#print(f'analog gain:{self.camera.analog_gain}')
+			#print(f'digital gain:{self.camera.digital_gain}')
 			if mode==Mode.RAW:
 				self.rawCapture=PiBayerArray(self.camera, output_dims=3)
 			elif mode==Mode.PREVIEW:
@@ -126,7 +132,8 @@ class Producer(QtCore.QThread):
 			for byte in range(4):
 				data[:, byte::5] |= ((data[:, 4::5] >> (byte * 2)) & 0b11)
 			data = np.delete(data, np.s_[4::5], 1)
-			
+			# X,Y=np.mgrid[0:2464,0:3280]
+			# data=(700*np.exp(-((X-1000)**2+(Y-2000)**2)/40000)).astype('uint16')
 			
 			#print(data.shape,data.dtype)
 			data=data[self.cropy:self.cropy+self.croph,self.cropx:self.cropx+self.cropw]

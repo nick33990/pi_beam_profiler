@@ -46,7 +46,7 @@ class InteractionWidget(QWidget):
 		self.exposure_speed_edit.setMaximumWidth(100)
 		self.exposure_speed_edit.setPrefix('us: ')
 		self.exposure_speed_edit.setMinimum(1)
-		self.exposure_speed_edit.setMaximum(100000)
+		self.exposure_speed_edit.setMaximum(400000)
 
 		self.exposure_speed_edit.setValue(init_exposure_speed)
 		
@@ -56,11 +56,17 @@ class InteractionWidget(QWidget):
 		
 		
 		if mode==Mode.RAW:
+			self.background_edit=QSpinBox()
+			self.background_edit.setMaximumWidth(100)
+			self.background_edit.setMinimum(0)
+			self.background_edit.setMaximum(1023)
+			self.background_edit.setValue(0)
+			
 			self.ROI_label = QLabel('ROI')
 
 			#self.crop_edit.setBackColor(Qt
 			self.ROI_check = QCheckBox()
-
+			self.calibration_check=QCheckBox()
 
 			self.x0_label = QLabel('x0')
 			self.y0_label = QLabel('y0')
@@ -77,8 +83,10 @@ class InteractionWidget(QWidget):
 			left_layout.addWidget(self.ROI_label)
 			#left_layout.addWidget(self.crop_edit)
 			left_layout.addWidget(self.ROI_check)
+			left_layout.addWidget(self.calibration_check)
 			left_layout.addWidget(self.exposure_speed_label)
 			left_layout.addWidget(self.exposure_speed_edit)		
+			left_layout.addWidget(self.background_edit)
 			left_layout.addWidget(self.start_button)
 			left_layout.addWidget(self.save_button)
 			left_layout.addWidget(self.zoomout_button)
@@ -91,6 +99,7 @@ class InteractionWidget(QWidget):
 			left_layout.addWidget(self.exposure_speed_label)
 			left_layout.addWidget(self.exposure_speed_edit)		
 			left_layout.addWidget(self.start_button)
+			
 		
 		self.prev=time()
 		
@@ -111,7 +120,10 @@ class InteractionWidget(QWidget):
 		self.label.setPixmap(self.pixmap)
 		self.label.setFixedSize(PB_WIDTH,PB_HEIGHT);
 		self.label.move(120,0);
+		self.real_label_size=(PB_WIDTH,PB_HEIGHT)
+	#for matplotlib widget, fps vv 1.5 times
 		# if mode==Mode.RAW:
+	
 			# dynamic_canvas = FigureCanvas(Figure(figsize=(5, 3)))
 			# right_layout.addWidget(dynamic_canvas)
 			# right_layout.addWidget(NavigationTool(dynamic_canvas, self))
@@ -126,18 +138,20 @@ class InteractionWidget(QWidget):
 		major_layout.addLayout(right_layout)
 		
 		self.exposure_speed_edit.valueChanged.connect(self.set_shutter_speed)
-		if mode==Mode.RAW:
-			#self.painter = QPainter(self.label.pixmap())
-			self.crop_edit=QLineEdit(self)
-			#self.crop_edit.textChanged.connect(self.on_text_changed)
-			self.crop_edit.setFixedSize(120,30)
-			self.crop_edit.move(0,50)
-			#self.crop_edit.setFontPointSize(10)
-			self.crop_edit.setText(f"{0},{0},{raw_resolution[0]},{raw_resolution[1]}")
-			self.save_button.clicked.connect(self.save_button_clicked)
-			self.crop_edit.installEventFilter(self)
-		
-		
+		# if mode==Mode.RAW:
+			# #self.painter = QPainter(self.label.pixmap())
+			# self.crop_edit=QLineEdit(self)
+			# #self.crop_edit.textChanged.connect(self.on_text_changed)
+			# self.crop_edit.setFixedSize(120,30)
+			# self.crop_edit.move(0,80)
+			# #self.crop_edit.setFontPointSize(10)
+			# self.crop_edit.setText(f"{0},{0},{raw_resolution[0]},{raw_resolution[1]}")
+			# self.save_button.clicked.connect(self.save_button_clicked)
+			# self.crop_edit.installEventFilter(self)
+			# self.calibration=None
+			# if use_calibration:
+				# self.calibration=np.load(path_to_calibration_im)
+			
 		self.calc=beam_math(raw_resolution[0],raw_resolution[1])
 		
 		self.need_save=False
@@ -172,6 +186,8 @@ class InteractionWidget(QWidget):
 	def zoomout(self):
 		self.crop_pos=QPoint(0,0)
 		self.crop_size=QSize(raw_resolution[0],raw_resolution[1])
+		
+		self.calc.update_grid(self.crop_size.width(),self.crop_size.height())
 	
 	def pause_camera(self):
 		pass
@@ -191,6 +207,8 @@ class InteractionWidget(QWidget):
 		#if self.mouse_start_pos.x()<120 or 
 		self.mouse_pressed=True
 		self.mouse_start_pos=event.pos()-QPoint(120,0)
+		
+		#print(self.mouse_start_pos,self.mouse_start_pos.x(),self.mouse_start_pos.x()/PB_WIDTH*3280)
 		
 		QWidget.mousePressEvent(self,event)
 		
@@ -217,7 +235,7 @@ class InteractionWidget(QWidget):
 		elif x>xm:
 			return xm
 		else:
-			return 8*(x//8)
+			return 4*(x//4)
 	
 	def mouseReleaseEvent(self,event):
 		super(InteractionWidget,self).mouseReleaseEvent(event)
@@ -228,12 +246,15 @@ class InteractionWidget(QWidget):
 		w=abs(self.mouse_start_pos.x()-self.mouse_pos.x())
 		h=abs(self.mouse_start_pos.y()-self.mouse_pos.y())
 		
+		wreal=self.real_label_size[0]
+		hreal=self.real_label_size[1]
+		
 		self.crop_pos.setX(self.crop_pos.x()+\
-				int((x0/PB_WIDTH)*self.crop_size.width()))
+				int(x0/wreal*self.crop_size.width()))
 		self.crop_pos.setY(self.crop_pos.y()+\
-				int((y0/PB_HEIGHT)*self.crop_size.height()))
-		self.crop_size.setWidth(int(w/PB_WIDTH*self.crop_size.width()))
-		self.crop_size.setHeight(int(h/PB_HEIGHT*self.crop_size.height()))
+				int((y0/hreal)*self.crop_size.height()))
+		self.crop_size.setWidth(int(w/wreal*self.crop_size.width()))
+		self.crop_size.setHeight(int(h/hreal*self.crop_size.height()))
 		
 		self.crop_pos.setX(self.tomod4(self.crop_pos.x(),raw_resolution[0]))
 		self.crop_pos.setY(self.tomod4(self.crop_pos.y(),raw_resolution[1]))
@@ -245,7 +266,7 @@ class InteractionWidget(QWidget):
 		#self.crop_pos=self.pos()+Interaction.elementwise_(QPointF(x0,y0),QPoint(PB_WIDTH,PB_HEIGHT))
 		
 		self.mouse_pressed=False
-	
+		#print(self.crop_pos,self.crop_size)
 	# def update_grid(self,w,h):
 		# self.I_grid,self.J_grid=np.meshgrid(\
 			# np.arange(w),\
@@ -255,6 +276,8 @@ class InteractionWidget(QWidget):
 		# self.J_grid_sqr=self.J_grid*self.J_grid
 	
 	def eventFilter(self,obj,event):
+		if event.type()==QEvent.KeyPress:
+			print(event.key())
 		if event.type()==QEvent.KeyPress and obj is self.crop_edit:
 			if event.key() ==Qt.Key_Return and self.crop_edit.hasFocus:
 				crop_rect=[int(sp) for sp in self.crop_edit.text().split(',')]#[:-1]#.replace('\n','')
@@ -326,11 +349,27 @@ class InteractionWidget(QWidget):
 			
 			img=img[self.crop_pos.y():self.crop_pos.y()+self.crop_size.height(),\
 					self.crop_pos.x():self.crop_pos.x()+self.crop_size.width()]
-
+			img=img*(img>self.background_edit.value())
 			# if self.crop_pos.x()>0:
 				# print(self.crop_pos)
 				# img[self.crop_pos.y():self.crop_pos.y()+self.crop_size.height(),\
 					# self.crop_pos.x():self.crop_pos.x()+self.crop_size.width()]=1023
+			# if use_calibration and self.calibration_check.isChecked():
+				# img=img.astype('float32')/(eps+self.calibration[self.crop_pos.y():self.crop_pos.y()+self.crop_size.height(),\
+					# self.crop_pos.x():self.crop_pos.x()+self.crop_size.width()])
+				# #таким образом img от 0 до 1023, т.к. eps=1
+				
+				
+				#img*=50
+				
+				#img=img.astype('uint16')
+			if self.calibration_check.isChecked():
+				calibrate(img,calibration_coeffs[0],\
+							calibration_coeffs[1],\
+							calibration_coeffs[2],\
+							1-self.crop_pos.x()%2,\
+							1-self.crop_pos.y()%2)
+		
 			if not self.disable_calculations:
 				
 				if img.shape[0]!=self.calc.I_grid.shape[0] or img.shape[1]!=self.calc.I_grid.shape[1]:
@@ -354,7 +393,7 @@ class InteractionWidget(QWidget):
 
 
 				step=1
-				h=50
+				h=min(self.crop_size.width(),self.crop_size.height())//10
 
 
 		
@@ -368,20 +407,30 @@ class InteractionWidget(QWidget):
 			if self.ROI_check.isChecked():
 				img=img[::2,::2]
 			#sprint(self.
+			
+		
+			
+		print(np.max(img),self.worker.camera.analog_gain,\
+							self.worker.camera.digital_gain,\
+							self.worker.camera.awb_mode)
+			#img=(255*np.log(img.astype('float32')+1)).astype('uint8')
+		if self.mode==Mode.RAW:
 			img=(img>>2).astype('uint8')
 		img=self.ndarray2qimage(img)
 		img.setColorTable(self.rgbas)
 		tmp=QPixmap(img)#.scaled(PB_WIDTH,PB_HEIGHT))
-		self.label.setPixmap(tmp.scaled(PB_WIDTH,PB_HEIGHT,Qt.KeepAspectRatio))#QPixmap(qImg))
-		
+		tmp=tmp.scaled(PB_WIDTH,PB_HEIGHT,Qt.KeepAspectRatio)
+		self.label.setPixmap(tmp)#QPixmap(qImg))
+		self.real_label_size=(tmp.size().width(),tmp.size().height())
 		if self.mouse_pressed:
 			self.draw_rect()
 
 		if not (self.mode==Mode.PREVIEW or self.disable_calculations):
-			self.draw_section(ysect)
-			self.draw_section(xsect,mx,my,\
-					(RMS_x/self.crop_size.width())*PB_WIDTH,\
-					(RMS_y/self.crop_size.height())*PB_HEIGHT)
+			pass
+			# self.draw_section(ysect)
+			# self.draw_section(xsect,mx,my,\
+					# (RMS_x/self.crop_size.width())*PB_WIDTH,\
+					# (RMS_y/self.crop_size.height())*PB_HEIGHT)
 		
 		self.label.repaint()
 
