@@ -40,7 +40,7 @@ class InteractionWidget(QWidget):
 		right_layout = QVBoxLayout()
 		major_layout = QHBoxLayout()
 		
-		self.exposure_speed_label = QLabel()#('Exposure\ntime')		
+		self.exposure_speed_label = QLabel('Время\nЭкспонирования')#('Exposure\ntime')		
 
 		self.exposure_speed_edit = QSpinBox()
 		self.exposure_speed_edit.setMaximumWidth(100)
@@ -54,8 +54,9 @@ class InteractionWidget(QWidget):
 		self.start_button.setMaximumWidth(50)
 		self.start_button.clicked.connect(self.start_camera)
 		
-		
-		if mode==Mode.RAW:
+		#if mode==Mode.CALIBRATION:
+		#	left_layout.addStretch()
+		if True:#mode==Mode.RAW:
 			self.background_edit=QSpinBox()
 			self.background_edit.setMaximumWidth(100)
 			self.background_edit.setMinimum(0)
@@ -66,8 +67,10 @@ class InteractionWidget(QWidget):
 
 			#self.crop_edit.setBackColor(Qt
 			self.ROI_check = QCheckBox()
+			self.ROI_check.setText('/2')
 			self.calibration_check=QCheckBox()
-
+			self.calibration_check.setText('Калибровка')
+			
 			self.x0_label = QLabel('x0')
 			self.y0_label = QLabel('y0')
 			self.delta_x_label = QLabel(u'\u0394 x')
@@ -80,30 +83,77 @@ class InteractionWidget(QWidget):
 			self.zoomout_button.setMaximumWidth(50)
 			self.zoomout_button.clicked.connect(self.zoomout)
 			
-			left_layout.addWidget(self.ROI_label)
+			self.awb_checkbox=QCheckBox()
+			self.awb_checkbox.setText('Баланс белого')
+			self.awb_checkbox.setChecked(True)
+			self.awb_checkbox.stateChanged.connect(self.set_awb)
+			
+			self.gain_checkbox=QCheckBox()
+			self.gain_checkbox.setText('Усиление')
+			self.gain_checkbox.setChecked(True)
+			self.gain_checkbox.stateChanged.connect(self.set_gain)
+
 			#left_layout.addWidget(self.crop_edit)
 			left_layout.addWidget(self.ROI_check)
 			left_layout.addWidget(self.calibration_check)
 			left_layout.addWidget(self.exposure_speed_label)
-			left_layout.addWidget(self.exposure_speed_edit)		
+			left_layout.addWidget(self.exposure_speed_edit)
+			left_layout.addWidget(QLabel('Уровень шума'))		
 			left_layout.addWidget(self.background_edit)
 			left_layout.addWidget(self.start_button)
 			left_layout.addWidget(self.save_button)
 			left_layout.addWidget(self.zoomout_button)
-			left_layout.addWidget(self.x0_label)
-			left_layout.addWidget(self.y0_label)
-			left_layout.addWidget(self.delta_x_label)
-			left_layout.addWidget(self.delta_y_label)
+			left_layout.addWidget(self.awb_checkbox)
+			left_layout.addWidget(self.gain_checkbox)
+			if mode==Mode.CALIBRATION:
+				self.get_calibration_button=QPushButton()
+				self.get_calibration_button.setText('Снять\nкалибвку')
+				self.get_calibration_button.clicked.connect(self.get_calibration)
+				
+				self.get_noise_button=QPushButton()
+				self.get_noise_button.setText('Снять\шум')
+				self.get_noise_button.clicked.connect(self.save_noise_map)
+				#self.get_calibration_button.setMaximumWidth(50)
+		
+				self.label1=QLabel()
+				self.label1.setText('Калибровочные\nкоэффициенты')
+				#self.label1.setMaximumWidth(50)
+				#self.label1.move(0,50)
+		
+				self.calibration_coeffs_tb=QLineEdit()
+				self.calibration_coeffs_tb.setText(str(beam_math.calibration_coeffs))
+				self.calibration_coeffs_tb.textChanged.connect(self.change_coeffs)
+				#self.calibration_coeffs_tb.setMaximumWidth(60)
+				#self.calibration_coeffs_tb.move(0,105)
+				
+				#left_layout.addStretch()
+				left_layout.addWidget(self.get_calibration_button)
+				left_layout.addWidget(self.get_noise_button)
+				#left_layout.addStretch()
+				left_layout.addWidget(self.label1)
+				#left_layout.addStretch()
+				left_layout.addWidget(self.calibration_coeffs_tb)
+				#left_layout.addStretch()
+				
+				self.mask_pos=(0,0)
+				self.mask_size=(1,1)
+				self.mouse_button=0
+				self.mask=[[0]]
+				self.need_calibration=False
+			elif mode==Mode.RAW:
+				left_layout.addWidget(self.x0_label)
+				left_layout.addWidget(self.y0_label)
+				left_layout.addWidget(self.delta_x_label)
+				left_layout.addWidget(self.delta_y_label)
 			
-		elif mode==Mode.PREVIEW:
-			left_layout.addWidget(self.exposure_speed_label)
-			left_layout.addWidget(self.exposure_speed_edit)		
-			left_layout.addWidget(self.start_button)
-			
+		# elif mode==Mode.PREVIEW:
+			# left_layout.addWidget(self.exposure_speed_label)
+			# left_layout.addWidget(self.exposure_speed_edit)		
+			# left_layout.addWidget(self.start_button)
+
 		
 		self.prev=time()
 		
-		self.setLayout(major_layout)
 		
 		###########################
 		sm=cm.ScalarMappable(cmap=cmap)
@@ -113,14 +163,23 @@ class InteractionWidget(QWidget):
 		###########################
 		
 		
-		self.label = QLabel(self)
+		self.label = QLabel()
 		#qImg=self.ndarray2qimage(np.zeros([init_resolution[0],init_resolution[1],3],'uint8'))
 		qImg=self.ndarray2qimage(np.zeros([PB_HEIGHT,PB_WIDTH,3],'uint8'))
 		self.pixmap = QPixmap(QImage(qImg))
 		self.label.setPixmap(self.pixmap)
 		self.label.setFixedSize(PB_WIDTH,PB_HEIGHT);
-		self.label.move(120,0);
+		
+		# if mode==Mode.PREVIEW:
+			# beam_math.noise_map=[[10]]
+		# print(beam_math.noise_map)
+		#self.label.move(140,0);
+
 		self.real_label_size=(PB_WIDTH,PB_HEIGHT)
+		self.label_pos=(0,1)
+		right_layout.addWidget(self.label)
+		
+		self.setLayout(major_layout)
 	#for matplotlib widget, fps vv 1.5 times
 		# if mode==Mode.RAW:
 	
@@ -130,6 +189,7 @@ class InteractionWidget(QWidget):
 			# self._dynamic_ax = dynamic_canvas.figure.subplots()
 			# self.pmap=self._dynamic_ax.imshow(np.random.random((2464,3280)),vmin=0,vmax=255)
 			# self.pmap.figure.canvas.draw()
+		
 		
 		self.crop_pos=QPoint(0,0)
 		self.crop_size=QSize(raw_resolution[0],raw_resolution[1])
@@ -151,28 +211,52 @@ class InteractionWidget(QWidget):
 			# self.calibration=None
 			# if use_calibration:
 				# self.calibration=np.load(path_to_calibration_im)
-			
+
 		self.calc=beam_math(raw_resolution[0],raw_resolution[1])
 		
 		self.need_save=False
+		self.need_noise_save=False
 		
 		self.mouse_pressed=False
 		self.mouse_start_pos=QPoint(0,0)
 		self.mouse_pos=QPoint(1,1)
 		
+		self.rect_color=Qt.red
 		############################################
 		#self.button_pressed=True
 		
 		#if self.mode==start_mode:
 			#self.init_camera()
 			# self.init_camera()
-		
+			
+	def change_coeffs(self):
+		txt=self.calibration_coeffs_tb.text()
+		txt=txt.replace('(','')
+		txt=txt.replace(')','')
+		txt=txt.replace("'","")
+		beam_math.calibration_coeffs=[int(c) for c in txt.split(',')]
+		print(beam_math.calibration_coeffs)
+	def save_noise_map(self):
+		print('at noise')
+		self.need_noise_save=True
+	
+	def set_gain(self):
+		self.worker.camera.close()
+		self.close_camera()
+		self.init_camera()
+		# self.worker.camera.exposure_mode='auto' if self.gain_checkbox.isChecked() else 'off'
+		# self.worker.camera.ISO=100
+	def set_awb(self):
+		self.worker.camera.awb_mode='auto' \
+				if self.awb_checkbox.isChecked() else 'off'
+	
 	def init_camera(self):
 		print('-----> init camera called at mode:',self.mode)
 		self.thread=QThread()
-		self.worker=Producer(self.mode)
+		self.worker=Producer(self.mode,'auto' \
+				if self.gain_checkbox.isChecked() else 'off')
 		self.worker.moveToThread(self.thread)
-		if self.mode==Mode.RAW:
+		if self.mode==Mode.RAW or self.mode==Mode.CALIBRATION:
 			self.thread.started.connect(self.worker.run_raw2)
 		elif self.mode==Mode.PREVIEW:
 			self.thread.started.connect(self.worker.run)
@@ -200,13 +284,33 @@ class InteractionWidget(QWidget):
 		print('waiting...')
 		self.worker.stop()
 		self.thread.wait()
+		#del self.worker
+	
+	def get_calibration(self):
+		print('at cal')
+		self.need_calibration=True
 	
 	def mousePressEvent(self,event):
 		super(InteractionWidget,self).mousePressEvent(event)
 		
+		if self.mode==Mode.CALIBRATION:
+			self.rect_color=Qt.red if event.buttons()==Qt.LeftButton else Qt.cyan
+
+		#print(event.buttons()==Qt.RightButton)
+		# self.label_pos=
+		# print(event.pos())
+		# print(self.label.pos())
+		self.mouse_start_pos=event.pos()-self.label.pos()
+		
+		if self.mouse_start_pos.x()>0 and \
+			self.mouse_start_pos.y()>0 and\
+			self.mouse_start_pos.x()<self.real_label_size[0] and\
+			self.mouse_start_pos.y()<self.real_label_size[1]:
+
+		
 		#if self.mouse_start_pos.x()<120 or 
-		self.mouse_pressed=True
-		self.mouse_start_pos=event.pos()-QPoint(120,0)
+			self.mouse_pressed=True
+		
 		
 		#print(self.mouse_start_pos,self.mouse_start_pos.x(),self.mouse_start_pos.x()/PB_WIDTH*3280)
 		
@@ -215,13 +319,15 @@ class InteractionWidget(QWidget):
 	def mouseMoveEvent(self,event):
 		super(InteractionWidget,self).mouseMoveEvent(event)
 		if self.mouse_pressed:
-			self.mouse_pos=event.pos()-QPoint(120,0)
+			self.mouse_pos=event.pos()-self.label.pos()
 			
 		QWidget.mouseMoveEvent(self,event)
 	
 	def draw_rect(self):
 		painter1=QPainter(self.label.pixmap())
-		painter1.setPen(QPen(Qt.red,1))
+
+		painter1.setPen(QPen(self.rect_color,1))
+
 		x0=min(self.mouse_start_pos.x(),self.mouse_pos.x())
 		y0=min(self.mouse_start_pos.y(),self.mouse_pos.y())
 		w=abs(self.mouse_start_pos.x()-self.mouse_pos.x())
@@ -240,40 +346,47 @@ class InteractionWidget(QWidget):
 	def mouseReleaseEvent(self,event):
 		super(InteractionWidget,self).mouseReleaseEvent(event)
 		
+		if self.mouse_pressed:
+			x0=min(self.mouse_start_pos.x(),self.mouse_pos.x())
+			y0=min(self.mouse_start_pos.y(),self.mouse_pos.y())
+			w=abs(self.mouse_start_pos.x()-self.mouse_pos.x())
+			h=abs(self.mouse_start_pos.y()-self.mouse_pos.y())
 		
-		x0=min(self.mouse_start_pos.x(),self.mouse_pos.x())
-		y0=min(self.mouse_start_pos.y(),self.mouse_pos.y())
-		w=abs(self.mouse_start_pos.x()-self.mouse_pos.x())
-		h=abs(self.mouse_start_pos.y()-self.mouse_pos.y())
-		
-		wreal=self.real_label_size[0]
-		hreal=self.real_label_size[1]
-		
-		self.crop_pos.setX(self.crop_pos.x()+\
+			wreal=self.real_label_size[0]
+			hreal=self.real_label_size[1]
+			
+			tmp_pos,tmp_size=QPoint(0,0),QSize(1,1)
+			tmp_pos.setX(self.crop_pos.x()+\
 				int(x0/wreal*self.crop_size.width()))
-		self.crop_pos.setY(self.crop_pos.y()+\
+			tmp_pos.setY(self.crop_pos.y()+\
 				int((y0/hreal)*self.crop_size.height()))
-		self.crop_size.setWidth(int(w/wreal*self.crop_size.width()))
-		self.crop_size.setHeight(int(h/hreal*self.crop_size.height()))
+			tmp_size.setWidth(int(w/wreal*self.crop_size.width()))
+			tmp_size.setHeight(int(h/hreal*self.crop_size.height()))
 		
-		self.crop_pos.setX(self.tomod4(self.crop_pos.x(),raw_resolution[0]))
-		self.crop_pos.setY(self.tomod4(self.crop_pos.y(),raw_resolution[1]))
-		self.crop_size.setWidth(self.tomod4(self.crop_size.width(),raw_resolution[0]))
-		self.crop_size.setHeight(self.tomod4(self.crop_size.height(),raw_resolution[1]))
-		
-		self.calc.update_grid(self.crop_size.width(),self.crop_size.height())
-		#print(self.crop_pos)
-		#self.crop_pos=self.pos()+Interaction.elementwise_(QPointF(x0,y0),QPoint(PB_WIDTH,PB_HEIGHT))
-		
-		self.mouse_pressed=False
-		#print(self.crop_pos,self.crop_size)
-	# def update_grid(self,w,h):
-		# self.I_grid,self.J_grid=np.meshgrid(\
-			# np.arange(w),\
-			# np.arange(h)
-		# )
-		# self.I_grid_sqr=self.I_grid*self.I_grid
-		# self.J_grid_sqr=self.J_grid*self.J_grid
+			if self.mode==Mode.CALIBRATION and self.rect_color==Qt.cyan:
+				tmp_pos-=self.crop_pos
+				# self.mask=np.zeros(self.calc.I_grid.shape,dtype='uint16')
+				# self.mask[tmp_pos.y():tmp_pos.y()+tmp_size.height(),\
+					# tmp_pos.x():tmp_pos.x()+tmp_size.width()]=1
+				self.mask=	(self.calc.I_grid>tmp_pos.x())*\
+							(self.calc.J_grid>tmp_pos.y())*\
+							(self.calc.I_grid<(tmp_size.width()+tmp_pos.x()))*\
+							(self.calc.J_grid<(tmp_size.height()+tmp_pos.y()))
+			else:
+				
+				tmp_pos.setX(self.tomod4(tmp_pos.x(),raw_resolution[0]))
+				tmp_pos.setY(self.tomod4(tmp_pos.y(),raw_resolution[1]))
+				tmp_size.setWidth(self.tomod4(tmp_size.width(),raw_resolution[0]))
+				tmp_size.setHeight(self.tomod4(tmp_size.height(),raw_resolution[1]))
+			
+			
+				self.crop_pos=tmp_pos
+				self.crop_size=tmp_size
+				self.calc.update_grid(self.crop_size.width(),\
+				self.crop_size.height())
+
+			self.mouse_pressed=False
+
 	
 	def eventFilter(self,obj,event):
 		if event.type()==QEvent.KeyPress:
@@ -323,6 +436,7 @@ class InteractionWidget(QWidget):
 				self.worker.is_running=True
 			#self.start_thread()
 			self.start_button.setText(pause_symbol)
+			self.gain_checkbox.setEnabled(False)
 		else:
 			self.button_pressed=False
 			#self.worker.stop()
@@ -330,16 +444,14 @@ class InteractionWidget(QWidget):
 			#self.thread.wait()
 			self.worker.is_running=False
 			self.start_button.setText(play_symbol)
+			self.gain_checkbox.setEnabled(True)
 			#self.worker.stop()
 
 	
 	def on_image_ready(self,img):
 		# self.pmap.set_data(img)
 		# self.pmap.figure.canvas.draw()
-		
-		if self.need_save:
-			np.save('1',img)
-			self.need_save=False
+
 		
 		print(time()-self.prev)
 		self.prev=time()
@@ -347,9 +459,26 @@ class InteractionWidget(QWidget):
 		if not (self.mode==Mode.PREVIEW):
 			#return 0
 			
+			if self.need_noise_save:
+				beam_math.noise_map=img.copy()
+				self.need_noise_save=False
+				print(len(beam_math.noise_map))
+			
 			img=img[self.crop_pos.y():self.crop_pos.y()+self.crop_size.height(),\
 					self.crop_pos.x():self.crop_pos.x()+self.crop_size.width()]
-			img=img*(img>self.background_edit.value())
+			if self.mode==Mode.CALIBRATION:
+				if len(self.mask)>4:
+					img*=self.mask
+				if self.need_calibration:
+					self.calibration_coeffs_tb.setText(str(get_calibration_pixelwise(img,1-self.crop_pos.x()%2,1-self.crop_pos.y()%2)))
+					self.need_calibration=False
+			
+			
+			if len(beam_math.noise_map)>5:
+				img=img*(img>self.background_edit.value()*\
+				beam_math.noise_map[self.crop_pos.y():self.crop_pos.y()+\
+				self.crop_size.height(),\
+				self.crop_pos.x():self.crop_pos.x()+self.crop_size.width()])
 			# if self.crop_pos.x()>0:
 				# print(self.crop_pos)
 				# img[self.crop_pos.y():self.crop_pos.y()+self.crop_size.height(),\
@@ -369,8 +498,15 @@ class InteractionWidget(QWidget):
 							calibration_coeffs[2],\
 							1-self.crop_pos.x()%2,\
 							1-self.crop_pos.y()%2)
-		
-			if not self.disable_calculations:
+			
+			#########################
+					
+			if self.need_save:
+				np.save('1',img)
+				self.need_save=False
+				
+			
+			if not self.disable_calculations and self.mode==Mode.RAW:
 				
 				if img.shape[0]!=self.calc.I_grid.shape[0] or img.shape[1]!=self.calc.I_grid.shape[1]:
 					print(f'img:{img.shape} \tgrid:{self.calc.I_grid.shape}')
@@ -412,9 +548,10 @@ class InteractionWidget(QWidget):
 			
 		print(np.max(img),self.worker.camera.analog_gain,\
 							self.worker.camera.digital_gain,\
-							self.worker.camera.awb_mode)
+							self.worker.camera.awb_mode,\
+							self.worker.camera.exposure_mode)
 			#img=(255*np.log(img.astype('float32')+1)).astype('uint8')
-		if self.mode==Mode.RAW:
+		if self.mode==Mode.RAW or self.mode==Mode.CALIBRATION:
 			img=(img>>2).astype('uint8')
 		img=self.ndarray2qimage(img)
 		img.setColorTable(self.rgbas)

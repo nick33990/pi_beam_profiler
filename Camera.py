@@ -8,6 +8,7 @@ from PyQt5.QtCore import QThread
 cam_availbale=True
 
 if cam_availbale:
+	import picamera
 	from picamera.array import PiRGBArray,PiBayerArray
 	from picamera import PiCamera
 import time
@@ -16,7 +17,7 @@ from Constants import *
 class Producer(QtCore.QThread):
 	image_ready=QtCore.pyqtSignal(object)
 
-	def __init__(self,mode):
+	def __init__(self,mode,exp_mode='auto'):
 		QtCore.QThread.__init__(self)
 		self.is_running=False
 		self.is_killed=False
@@ -27,19 +28,21 @@ class Producer(QtCore.QThread):
 		self.cropw=raw_resolution[0]
 		self.croph=raw_resolution[1]
 		if cam_availbale:
+
 			self.camera = PiCamera()
-			
+
+				
 			self.camera.framerate = preview_framerate
 			self.camera.shutter_speed=init_exposure_speed
 			#self.camera.ISO=100
-			# self.camera.exposure_mode='off'
+			self.camera.exposure_mode=exp_mode
 			
 			# self.camera.awb_mode='off'
 			#self.camera.ISO=800#analog gain=1
 			print(f'ISO:{self.camera.ISO}\nShutter speed:{self.camera.shutter_speed}\nresolution:{self.camera.resolution}')
 			#print(f'analog gain:{self.camera.analog_gain}')
 			#print(f'digital gain:{self.camera.digital_gain}')
-			if mode==Mode.RAW:
+			if mode==Mode.RAW or mode==Mode.CALIBRATION:
 				self.rawCapture=PiBayerArray(self.camera, output_dims=3)
 			elif mode==Mode.PREVIEW:
 				self.camera.resolution = preview_resolution
@@ -137,6 +140,7 @@ class Producer(QtCore.QThread):
 			
 			#print(data.shape,data.dtype)
 			data=data[self.cropy:self.cropy+self.croph,self.cropx:self.cropx+self.cropw]
+			data=np.load('ring1.npy')
 			self.image_ready.emit(data)# <- uint16 (10 bit)
 			
 			# #print(self.cropy,self.cropx,self.croph,self.cropw)

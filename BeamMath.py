@@ -1,8 +1,12 @@
 import numpy as np
 
 class beam_math:
+    
+    noise_map=[[0]]
+    calibration_coeffs=(8,21,34)
     def __init__(self,Nx,Ny):
         self.update_grid(Nx,Ny)
+    
     def update_grid(self,Nx,Ny):
         self.I_grid,self.J_grid=np.meshgrid(\
 			np.arange(Nx),\
