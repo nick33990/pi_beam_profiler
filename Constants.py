@@ -1,6 +1,9 @@
 import numpy as np
 from enum import Enum
 
+pi_available=False
+emulate_noise=10
+
 class Mode(Enum):
 	RAW=0
 	PREVIEW=1
@@ -18,32 +21,41 @@ def get_calibration_pixelwise(I,rx=1,ry=1,eps=1e-7):
 	rb=np.sum((b>0)*(r/(b+eps)))
 	rb/=np.sum(b>0)
 	
+	#return 1.0,round(rg,3),round(rb,3)
 	return (8,int(rg*8),int(rb*8))
 	
-
 def calibrate(I,r,g,b,rx=1,ry=1,shift=3):#rx,ry-red pixel
+	# Imax=np.max(I)
+	# print(Imax)
+	# I=I.astype('float16')
+	# print(np.max(I))
+	
 	I[ry::2,rx::2]*=r
 	I[1-ry::2,rx::2]*=g
 	I[ry::2,1-rx::2]*=g
 	I[1-ry::2,1-rx::2]*=b
-	I>>=shift
+	
+	I=I//int(r)
+	return I
 
+
+init_dir='/home/pi/Documents/my beam profiler/Project'
+path_to_coeffs='Coeffs.txt'
 use_calibration=True
 eps=1
-# (8,24,47)-<rtot>/<gtot>
-# (8,21,34)-<rloc>/<gloc>
-# (1,6,20)-table
-calibration_coeffs=(8,21,34)
-#max_I=1023*47
-#path_to_calibration_im='1.npy'
-cmap='gnuplot2'
-WIDTH=780
-HEIGHT=600
-PB_WIDTH=640
-PB_HEIGHT=480
+
+cam_exp_time=2000
+cam_gain=False
+
+cmap='turbo'
+WIDTH=1000
+HEIGHT=700
+PB_WIDTH=int(640*1.18)
+PB_HEIGHT=int(480*1.18)
 um=1.12
-init_exposure_speed=2000
-#init_resolution=(2592,1944)#(640,480)#(2592,1944)#(640,480)
+
+raw_framerate=10
+raw_framerate_long=5
 raw_resolution=(3280,2464) 
 preview_framerate=30
 preview_resolution=(640,480)#(2592,1944)

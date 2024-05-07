@@ -5,17 +5,20 @@ from PyQt5 import QtCore, QtWidgets, QtGui
 from PyQt5.QtWidgets import QPushButton,QSpinBox
 from PyQt5.QtCore import QThread
 
-cam_availbale=True
 
-if cam_availbale:
+import time
+from BeamMath import beam_math
+from Constants import * 
+
+if pi_available:
 	import picamera
 	from picamera.array import PiRGBArray,PiBayerArray
 	from picamera import PiCamera
-import time
-from Constants import * 
 
 class Producer(QtCore.QThread):
 	image_ready=QtCore.pyqtSignal(object)
+	io_exception=QtCore.pyqtSignal(bool)
+
 
 	def __init__(self,mode,exp_mode='auto'):
 		QtCore.QThread.__init__(self)
@@ -27,13 +30,18 @@ class Producer(QtCore.QThread):
 		self.cropy=0
 		self.cropw=raw_resolution[0]
 		self.croph=raw_resolution[1]
-		if cam_availbale:
+		if pi_available:
 
 			self.camera = PiCamera()
 
-				
-			self.camera.framerate = preview_framerate
-			self.camera.shutter_speed=init_exposure_speed
+			if mode==Mode.PREVIEW:
+				self.camera.framerate = preview_framerate
+			else:
+				if beam_math.cam_exp_time<500000:#глупо, но на всякий
+					self.camera.framerate=raw_framerate# для максимального времени в 1 с (и)
+				else:
+					self.camera.framerate=raw_framerate_long# для 0.2 с
+			self.camera.shutter_speed=beam_math.cam_exp_time#init_exposure_speed
 			#self.camera.ISO=100
 			self.camera.exposure_mode=exp_mode
 			
@@ -49,6 +57,12 @@ class Producer(QtCore.QThread):
 				self.rawCapture=PiRGBArray(self.camera, size=preview_resolution)
 		# allow the camera to warmup
 			time.sleep(0.1)
+		else:
+			X,Y=np.mgrid[-raw_resolution[1]//2:raw_resolution[1]//2,-raw_resolution[0]//2:raw_resolution[0]//2]
+			self.dummy=(np.exp(-(7*X/raw_resolution[1])**2-(9*Y/raw_resolution[1])**2))#.astype('uint16')
+			self.dummy[::2,::2]/=5
+			self.dummy[1::2,::2]/=3
+			self.dummy[::2,1::2]/=3
 		
 
 	def __del__(self):
@@ -58,8 +72,9 @@ class Producer(QtCore.QThread):
 		if not self.is_running:
 			self.is_running=True
 		for frame in self.camera.capture_continuous(self.rawCapture, format="rgb", use_video_port=True):
-			image = frame.array[:,:,0].copy()
-				
+			self.camera.awb_gains=(7,1)
+			image = frame.array[:,:,:].copy()
+			#print(image.shape)
 			self.image_ready.emit(image)
 				
 			self.rawCapture.truncate(0)
@@ -71,28 +86,8 @@ class Producer(QtCore.QThread):
 
 
 
-	#про raw-формат на 48-ой странице мануала:
-	#только в полном разрешении, 10 бит, BGGR и проч
-	def run_raw(self):
-		if not self.is_running:
-			self.is_running=True
-		
-		while self.is_running:
-			
-			self.camera.capture(self.rawCapture, 'jpeg', bayer=True)
-			
-			#arr=self.rawCapture.array
-			#arr=self.rawCapture.demosaic()-very slow (4 sec)
-			
+	
 
-			arr=(arr>>2).astype('uint8')
-
-			self.image_ready.emit(arr[:,:,0])
-			self.rawCapture.truncate(0)
-			#print(np.max(arr),arr.shape,arr.dtype)
-			#img = Image.fromarray(output.astype(np.uint8))
-			
-			#img.save('my1.png')
 	def set_crop_rectangle(self,x,y,w,h):
 		if x+w>raw_resolution[0]:
 			w=w-x
@@ -103,13 +98,29 @@ class Producer(QtCore.QThread):
 	def run_raw2(self):#из мануала (5.6 сек -> при конверсии одной плоскости только r) 
 		if not self.is_running:
 			self.is_running=True
+
+
 		stream=io.BytesIO()
 		while True:#self.is_running:
+
 			if self.is_killed:
 				break
 			if not self.is_running:
 				continue
-			self.camera.capture(stream,'jpeg',bayer=True)
+
+			###################################
+			if not pi_available:
+				self.image_ready.emit((899*(self.dummy)).astype('uint16'))
+				time.sleep(1)
+				continue
+				
+
+			self.camera.awb_gains=(1,1)
+			try:
+				self.camera.capture(stream,'jpeg',bayer=True)
+			except:
+				self.io_exception.emit(True)
+				break
 			ver = {
 				'RP_ov5647': 1,
 				'RP_imx219': 2,
@@ -120,8 +131,7 @@ class Producer(QtCore.QThread):
 				2: 10270208,
 			}[ver]
 			data = stream.getvalue()[-offset:]
-			#print(data[:4]) ->b'BRCM'
-			#assert data[:4] == 'BRCM'
+
 			data = data[32768:]
 			data = np.fromstring(data, dtype=np.uint8)
 			
@@ -135,63 +145,11 @@ class Producer(QtCore.QThread):
 			for byte in range(4):
 				data[:, byte::5] |= ((data[:, 4::5] >> (byte * 2)) & 0b11)
 			data = np.delete(data, np.s_[4::5], 1)
-			# X,Y=np.mgrid[0:2464,0:3280]
-			# data=(700*np.exp(-((X-1000)**2+(Y-2000)**2)/40000)).astype('uint16')
-			
-			#print(data.shape,data.dtype)
+
 			data=data[self.cropy:self.cropy+self.croph,self.cropx:self.cropx+self.cropw]
-			data=np.load('ring1.npy')
+			#data=np.load('ring1.npy')
 			self.image_ready.emit(data)# <- uint16 (10 bit)
-			
-			# #print(self.cropy,self.cropx,self.croph,self.cropw)
-			# data=data[self.cropy:self.cropy+self.croph,self.cropx:self.cropx+self.cropw]
-			# #print(data.shape)
-			
-			# #self.image_ready.emit(data[1::2,0::2]>>2)
-			
-			# rgb = np.zeros(data.shape + (3,), dtype=data.dtype)
-			# rgb[1::2, 0::2, 0] = data[1::2, 0::2] # Red
-			# rgb[0::2, 0::2, 1] = data[0::2, 0::2] # Green
-			# rgb[1::2, 1::2, 1] = data[1::2, 1::2] # Green
-			# rgb[0::2, 1::2, 2] = data[0::2, 1::2] # Blue
-			
-			# bayer = np.zeros(rgb.shape, dtype=np.uint8)
-			# bayer[1::2, 0::2, 0] = 1 # Red
-			# bayer[0::2, 0::2, 1] = 1 # Green
-			# bayer[1::2, 1::2, 1] = 1 # Green
-			# bayer[0::2, 1::2, 2] = 1 # Blue
-			
-			# output = np.empty(rgb.shape, dtype=rgb.dtype)
-			# window = (3, 3)
-			# borders = (window[0] - 1, window[1] - 1)
-			# border = (borders[0] // 2, borders[1] // 2)
-			# rgb = np.pad(rgb, [
-				# (border[0], border[0]),
-				# (border[1], border[1]),
-				# (0, 0),
-			# ], 'constant')
-			
-			# bayer = np.pad(bayer, [
-				# (border[0], border[0]),
-				# (border[1], border[1]),
-				# (0, 0),
-			# ], 'constant')
-			
-			# for plane in range(1):
-				# p = rgb[..., plane]
-				# b = bayer[..., plane]
-				# pview = as_strided(p, shape=(
-					# p.shape[0] - borders[0],
-					# p.shape[1] - borders[1]) + window, strides=p.strides * 2)
-				# bview = as_strided(b, shape=(
-					# b.shape[0] - borders[0],
-					# b.shape[1] - borders[1]) + window, strides=b.strides * 2)
-				# psum = np.einsum('ijkl->ij', pview)
-				# bsum = np.einsum('ijkl->ij', bview)
-				# output[..., plane] = psum // bsum
-			# output = (output >> 2).astype(np.uint8)
-			
-			# self.image_ready.emit(output[:,:,0])
+
 	
 			
 	def stop(self):
